@@ -1,0 +1,40 @@
+#!/usr/bin/env python2
+
+import re
+import os
+import argparse
+import subprocess
+
+def main():
+    parser = argparse.ArgumentParser(description=('List files in git along with the author '
+                                                  'that first added the each file'))
+    parser.add_argument(
+        "--show-deleted",
+        help="Also show files that have been deleted in working directory but existed earlier",
+        action="store_true"
+    )
+    args, unrecognized_args = parser.parse_known_args()
+
+    git_repo_root = subprocess.check_output("git rev-parse --show-toplevel".split(" ")).strip()
+    git_command = "git log --raw --date-order --reverse --diff-filter=A --format=%H%x09%an " + \
+        " ".join(unrecognized_args)
+    stdout = subprocess.check_output(git_command.strip().split(" "))
+
+    sha1_author_row = re.compile(r"^(?P<sha1>[a-f0-9]{40})\t(?P<author>.*)$")
+    file_added_row = re.compile(r"^:.* A\t(?P<filepath>.*)$")
+    for line in stdout.splitlines():
+        m = sha1_author_row.match(line)
+        if m:
+            author = m.group("author")
+
+        m = file_added_row.match(line)
+        if m:
+            repo_filepath = m.group("filepath")
+            full_filepath = os.path.join(git_repo_root, repo_filepath)
+            if os.path.exists(full_filepath):
+                print author + " " + repo_filepath
+            elif args.show_deleted:
+                print author + " " + repo_filepath + " [DELETED]"
+
+if __name__ == '__main__':
+    main()
